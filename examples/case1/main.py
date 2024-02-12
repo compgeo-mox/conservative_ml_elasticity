@@ -39,7 +39,7 @@ if __name__ == "__main__":
     sf = solver.compute_sf()
 
     # step 2
-    s0 = solver.compute_s0()
+    s0 = solver.compute_s0_cg(sf)
 
     # step 3
     s, u, r = solver.compute_all(s0, sf)
