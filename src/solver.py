@@ -99,8 +99,10 @@ class Solver:
         idx = np.cumsum(self.dofs[:-1])
         return np.split(x, idx)
 
+    @abc.abstractmethod
     def get_f(self):
         pass
 
+    @abc.abstractmethod
     def get_g(self):
         pass
