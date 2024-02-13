@@ -59,7 +59,7 @@ class Solver:
         f = self.get_f()
         return self.sptr.solve(f)
 
-    def compute_s0_cg(self, sf):
+    def compute_s0_cg(self, sf, rtol=1e-10):
 
         iters = 0
 
@@ -73,12 +73,12 @@ class Solver:
         b = self.S0_T(self.get_g() - self.Ms @ sf)
         A = sps.linalg.LinearOperator([b.size] * 2, matvec=matvec)
 
-        s0, exit_code = sps.linalg.cg(A, b, callback=nonlocal_iterate)
+        s0, exit_code = sps.linalg.cg(A, b, rtol=rtol, callback=nonlocal_iterate)
         if exit_code != 0:
             raise ValueError("CG did not converge")
         print(iters)
 
-        return s0
+        return self.S0(s0)
 
     def compute_all(self, s0, sf):
         g = self.get_g()
@@ -99,10 +99,8 @@ class Solver:
         idx = np.cumsum(self.dofs[:-1])
         return np.split(x, idx)
 
-    @abc.abstractmethod
     def get_f(self):
         pass
 
-    @abc.abstractmethod
     def get_g(self):
         pass

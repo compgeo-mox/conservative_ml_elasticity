@@ -39,7 +39,7 @@ if __name__ == "__main__":
     sf = solver.compute_sf()
 
     # step 2
-    s0 = solver.compute_s0_cg(sf)
+    s0 = solver.compute_s0_cg(sf, rtol=1e-5)
 
     # step 3
     s, u, r = solver.compute_all(s0, sf)
@@ -48,7 +48,10 @@ if __name__ == "__main__":
     s_dir, u_dir, r_dir = solver.compute_direct()
 
     print(
-        np.linalg.norm(s - s_dir), np.linalg.norm(u - u_dir), np.linalg.norm(r - r_dir)
+        np.linalg.norm(s - s_dir) / np.linalg.norm(s_dir),
+        np.linalg.norm(u - u_dir) / np.linalg.norm(u_dir),
+        np.linalg.norm(r - r_dir) / np.linalg.norm(r_dir),
     )
+    # TODO: rewrite these to relative L2 errors
 
     pass
