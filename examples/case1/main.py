@@ -47,11 +47,8 @@ if __name__ == "__main__":
     # check with a direct computation
     s_dir, u_dir, r_dir = solver.compute_direct()
 
-    print(
-        np.linalg.norm(s - s_dir) / np.linalg.norm(s_dir),
-        np.linalg.norm(u - u_dir) / np.linalg.norm(u_dir),
-        np.linalg.norm(r - r_dir) / np.linalg.norm(r_dir),
-    )
-    # TODO: rewrite these to relative L2 errors
+    err_s = solver.compute_error(s, s_dir, solver.Ms)
+    err_u = solver.compute_error(u, u_dir, solver.Mu)
+    err_r = solver.compute_error(r, r_dir, solver.Mr)
 
-    pass
+    print(err_s, err_u, err_r)

@@ -106,3 +106,8 @@ class Solver:
     @abc.abstractmethod
     def get_g(self):
         pass
+
+    def compute_error(self, xn, x, M):
+        delta = xn - x
+        norm_x = np.sqrt(x @ M @ x)
+        return np.sqrt(delta @ M @ delta) / (norm_x if norm_x else 1)
