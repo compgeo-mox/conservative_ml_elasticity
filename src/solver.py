@@ -78,12 +78,13 @@ class Solver:
             raise ValueError("CG did not converge")
         print(iters)
 
-        s0 = self.S0(s)
+        return self.S0(s)
+
+    def check_s0(self, s0):
         if np.allclose(self.B @ s0, 0):
             print("s0 is in the kernel of B")
         else:
             raise ValueError("s0 is not in the kernel of B")
-        return s0
 
     def compute_all(self, s0, sf):
         g = self.get_g()

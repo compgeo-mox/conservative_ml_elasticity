@@ -40,6 +40,7 @@ if __name__ == "__main__":
 
     # step 2
     s0 = solver.compute_s0_cg(sf, rtol=1e-5)
+    solver.check_s0(s0)
 
     # step 3
     s, u, r = solver.compute_all(s0, sf)
