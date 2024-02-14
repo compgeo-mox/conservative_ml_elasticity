@@ -51,13 +51,13 @@ class Solver:
     def S0_T(self, x):
         return x - self.B.T @ self.SI_T(x)
 
-    def compute_s0(self):
-        s, _, _ = self.compute_direct()
-        return self.S0(s)
-
     def compute_sf(self):
         f = self.get_f()
         return self.sptr.solve(f)
+
+    def compute_s0(self):
+        s, _, _ = self.compute_direct()
+        return self.S0(s)
 
     def compute_s0_cg(self, sf, rtol=1e-10):
 
@@ -73,12 +73,12 @@ class Solver:
         b = self.S0_T(self.get_g() - self.Ms @ sf)
         A = sps.linalg.LinearOperator([b.size] * 2, matvec=matvec)
 
-        s0, exit_code = sps.linalg.cg(A, b, rtol=rtol, callback=nonlocal_iterate)
+        s, exit_code = sps.linalg.cg(A, b, rtol=rtol, callback=nonlocal_iterate)
         if exit_code != 0:
             raise ValueError("CG did not converge")
         print(iters)
 
-        return self.S0(s0)
+        return self.S0(s)
 
     def compute_all(self, s0, sf):
         g = self.get_g()
