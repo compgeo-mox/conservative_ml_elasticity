@@ -1,7 +1,5 @@
 import numpy as np
 
-import scipy.sparse as sps
-
 import porepy as pp
 import pygeon as pg
 
@@ -13,43 +11,71 @@ from solver import Solver
 
 class LocalSolver(Solver):
     def get_f(self):
-        return np.ones(self.dofs[1] + self.dofs[2])
+        return np.zeros(self.dofs[1] + self.dofs[2])
 
     def get_g(self):
-        sd = self.mdg.subdomains(dim=self.mdg.dim_max())[0]
+        b_faces = np.isclose(self.sd.face_centers[1, :], 0)
 
-        u_boundary = lambda x: np.array([-0.5 - x[1], -0.5 + x[0], 0])
+        # define the boundary condition
+        u_boundary = lambda _: np.array([0, 0, 0])
 
-        b_faces = sd.tags["domain_boundary_faces"]
-        return self.discr_s.assemble_nat_bc(sd, u_boundary, b_faces)
+        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces)
+
+    def ess_bc(self):
+        # select the faces on the bottom and top boundaries
+        top = np.isclose(self.sd.face_centers[1, :], 1)
+        left = np.isclose(self.sd.face_centers[0, :], 0)
+        right = np.isclose(self.sd.face_centers[0, :], 1)
+
+        b_faces = np.tile(np.logical_or.reduce((left, right, top)), self.sd.dim**2)
+        b_val = np.zeros_like(b_faces, dtype=float)
+
+        b_val[top.size : 3 * top.size] = np.tile(
+            np.sum(self.sd.cell_faces, axis=1).flatten(), 2
+        )
+        ess_dof = np.zeros(self.dofs.sum(), dtype=bool)
+        ess_dof[: self.dofs[0]] = b_faces
+
+        ess_val = np.zeros(ess_dof.size)
+        ess_val[: self.dofs[0]] = b_val
+
+        return ess_dof, ess_val
 
 
 if __name__ == "__main__":
+    # NOTE: difficulty to converge for RBM
+    folder = "examples/case1/"
     step_size = 0.1
     keyword = "elasticity"
+    tol = 1e-12
 
     dim = 2
-    mdg = pg.unit_grid(dim, step_size)
-    mdg.compute_geometry()
+    sd = pg.unit_grid(dim, step_size, as_mdg=False)
+    sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    solver = LocalSolver(mdg, data, keyword)
+    solver = LocalSolver(sd, data, keyword)
 
-    # step 1
-    sf = solver.compute_sf()
+    # # step 1
+    # sf = solver.compute_sf()
 
-    # step 2
-    s0 = solver.compute_s0_cg(sf, rtol=1e-5)
-    solver.check_s0(s0)
+    # # step 2
+    # s0 = solver.compute_s0_cg(sf, rtol=tol)
+    # solver.check_s0(s0)
 
-    # step 3
-    s, u, r = solver.compute_all(s0, sf)
+    # # step 3
+    # s, u, r = solver.compute_all(s0, sf)
 
     # check with a direct computation
     s_dir, u_dir, r_dir = solver.compute_direct()
 
-    err_s = solver.compute_error(s, s_dir, solver.Ms)
-    err_u = solver.compute_error(u, u_dir, solver.Mu)
-    err_r = solver.compute_error(r, r_dir, solver.Mr)
+    # # compute the errors
+    # err_s = solver.compute_error(s, s_dir, solver.Ms)
+    # err_u = solver.compute_error(u, u_dir, solver.Mu)
+    # err_r = solver.compute_error(r, r_dir, solver.Mr)
 
-    print(err_s, err_u, err_r)
+    # print(err_s, err_u, err_r)
+
+    # export the results
+    # solver.export(u, r, "tsp", folder)
+    solver.export(u_dir, r_dir, "dir", folder)
