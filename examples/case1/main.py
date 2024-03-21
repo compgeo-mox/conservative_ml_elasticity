@@ -22,17 +22,23 @@ class LocalSolver(Solver):
         return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces)
 
     def ess_bc(self):
-        # select the faces on the bottom and top boundaries
-        top = np.isclose(self.sd.face_centers[1, :], 1)
-        left = np.isclose(self.sd.face_centers[0, :], 0)
-        right = np.isclose(self.sd.face_centers[0, :], 1)
+        sd = self.sd
+        # select the faces for the essential boundary conditions
+        top = np.isclose(sd.face_centers[1, :], 1)
+        left = np.isclose(sd.face_centers[0, :], 0)
+        right = np.isclose(sd.face_centers[0, :], 1)
+        b_faces = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
 
-        b_faces = np.tile(np.logical_or.reduce((left, right, top)), self.sd.dim**2)
+        # only on the top boundary for the y-component we actually impose something not null
+        top_y = np.hstack((np.zeros(2 * top.size, dtype=bool), top, top))
+
+        # compute the actual of the imposed force, which is 1 downward
+        val = -np.array(np.sum(sd.cell_faces, axis=1)).flatten() * sd.face_areas
+
+        # insert the values in the correct position
         b_val = np.zeros_like(b_faces, dtype=float)
+        b_val[top_y] = np.hstack([np.zeros(2 * top.size)] + 2 * [val])[top_y]
 
-        b_val[top.size : 3 * top.size] = np.tile(
-            np.sum(self.sd.cell_faces, axis=1).flatten(), 2
-        )
         ess_dof = np.zeros(self.dofs.sum(), dtype=bool)
         ess_dof[: self.dofs[0]] = b_faces
 
