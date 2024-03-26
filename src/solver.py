@@ -15,7 +15,9 @@ class Solver:
         # define the discretization objects useful for our case
         self.discr_s = pg.VecBDM1(self.keyword)
         self.discr_u = pg.VecPwConstants(self.keyword)
-        self.discr_r = pg.PwConstants(self.keyword)
+        self.discr_r = (pg.PwConstants if sd.dim == 2 else pg.VecPwConstants)(
+            self.keyword
+        )
 
         self.build_matrices(data)
 
@@ -38,19 +40,25 @@ class Solver:
         # build the constriant operator
         self.B = sps.vstack((-div, -asym))
 
+        # consider essential bc
+        self.ess_dof, self.ess_val = self.ess_bc()
+        # ess_dof, ess_val = ess_dof[: self.dofs[0]], ess_val[: self.dofs[0]]
+
+        # define the restriction operator
+        to_keep = np.logical_not(self.ess_dof[: self.dofs[0]])
+        self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
+
         if self.sd.dim == 2:
             # build the spanning tree solve if it is available
-            sptr = pg.SpanningTreeElasticity(self.sd)
+            sptr = pg.SpanningTreeElasticity(self.sd, 0)
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
         elif self.sd.dim == 3:
             # in 3d consider the standard BBT approach
-            # NOTE: It is not working!!!
-            BBT = self.B @ self.B.T
-            self.sptr_solve = lambda x: self.B.T @ sps.linalg.spsolve(BBT, x)
-
-            BTB = self.B.T @ self.B
-            self.sptr_solve_transpose = lambda x: self.B @ sps.linalg.spsolve(BTB, x)
+            B_red = self.B @ self.R_0.T
+            BBT = B_red @ B_red.T
+            self.sptr_solve = lambda x: B_red.T @ sps.linalg.spsolve(BBT, x)
+            self.sptr_solve_transpose = lambda x: sps.linalg.spsolve(BBT, B_red @ x)
         else:
             raise ValueError("not implemented")
 
@@ -84,8 +92,8 @@ class Solver:
 
     def compute_sf(self):
         # compute the particular solution
-        f = self.get_f()
-        return self.sptr_solve(f)
+        f = self.get_f() - self.B @ self.ess_val[: self.dofs[0]]
+        return self.sptr_solve(f) + self.ess_val[: self.dofs[0]]
 
     def compute_s0(self):
         # compute the homogeneous solution by solving the direct problem
@@ -103,22 +111,24 @@ class Solver:
             nonlocal iters
             iters += 1
 
-        # define the right-hand side of the reduced system
-        b = self.S0_T(self.get_g() - self.Ms @ sf)
-
         # define implicitly the operator associated to the reduced system
         A_op = lambda x: self.S0_T(self.Ms @ self.S0(x))
-        A = sps.linalg.LinearOperator([b.size] * 2, matvec=A_op)
+        A_op_red = lambda x: self.R_0 @ A_op(self.R_0.T @ x)
+
+        # define the right-hand side of the reduced system
+        b = self.R_0 @ self.S0_T(self.get_g() - self.Ms @ sf)
+
+        A = sps.linalg.LinearOperator([b.size] * 2, matvec=A_op_red)
 
         # solve the reduced system with CG
-        s, exit_code = sps.linalg.cg(A, b, rtol=rtol, callback=nonlocal_iterate)
+        s, exit_code = sps.linalg.cg(A, b, callback=nonlocal_iterate)  # rtol=rtol
 
         if exit_code != 0:
             raise ValueError("CG did not converge")
         else:
             print("Number of iterations", iters)
 
-        return self.S0(s)
+        return self.S0(self.R_0.T @ s)
 
     def check_s0(self, s0):
         # check if the homogeneous solution respects the constraints
@@ -148,7 +158,8 @@ class Solver:
 
         # solve the saddle point problem
         ls = pg.LinearSystem(self.spp, rhs)
-        ls.flag_ess_bc(*self.ess_bc())
+        if np.any(self.ess_dof):
+            ls.flag_ess_bc(self.ess_dof, self.ess_val)
         x = ls.solve()
 
         # split and return the solution
@@ -170,13 +181,17 @@ class Solver:
         return np.sqrt(delta @ M @ delta) / (norm_x if not np.isclose(norm_x, 0) else 1)
 
     def export(self, u, r, file_name, folder):
+        dim = self.sd.dim
         # post process variables
         proj_u = self.discr_u.eval_at_cell_centers(self.sd)
-        cell_u = (proj_u @ u).reshape((2, -1), order="C")
-        cell_u = np.vstack((cell_u, np.zeros(cell_u.shape[1])))
+        cell_u = (proj_u @ u).reshape((dim, -1), order="C")
 
         proj_r = self.discr_r.eval_at_cell_centers(self.sd)
-        cell_r = proj_r @ r
+        if dim == 2:
+            cell_u = np.vstack((cell_u, np.zeros(cell_u.shape[1])))
+            cell_r = proj_r @ r
+        else:
+            cell_r = (proj_r @ r).reshape((dim, -1), order="C")
 
         save = pp.Exporter(self.sd, file_name, folder_name=folder)
         save.write_vtu([("cell_u", cell_u), ("cell_r", cell_r)])
