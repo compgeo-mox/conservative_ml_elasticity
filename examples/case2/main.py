@@ -27,7 +27,7 @@ class LocalSolver(Solver):
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces)
+        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces), b_faces
 
     def ess_bc(self):
         sd = self.sd
@@ -43,14 +43,10 @@ class LocalSolver(Solver):
         front = np.isclose(sd.face_centers[1, :], y_max)
         back = np.isclose(sd.face_centers[1, :], y_min)
 
-        b_faces = np.tile(
+        ess_dof = np.tile(
             np.logical_or.reduce((top, bottom, right, front, back)), sd.dim**2
         )
-
-        ess_dof = np.zeros(self.dofs.sum(), dtype=bool)
-        ess_dof[: self.dofs[0]] = b_faces
-
-        ess_val = np.zeros(ess_dof.size)
+        ess_val = np.zeros_like(ess_dof, dtype=float)
 
         return ess_dof, ess_val
 
@@ -68,7 +64,7 @@ if __name__ == "__main__":
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    solver = LocalSolver(sd, data, keyword)
+    solver = LocalSolver(sd, data, keyword, spanning_tree=False)
 
     # step 1
     sf = solver.compute_sf()

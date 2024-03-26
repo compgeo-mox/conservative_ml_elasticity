@@ -19,25 +19,23 @@ class LocalSolver(Solver):
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces)
+        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces), b_faces
 
     def ess_bc(self):
         sd = self.sd
+
         # select the faces for the essential boundary conditions
         top = np.isclose(sd.face_centers[1, :], 1)
         left = np.isclose(sd.face_centers[0, :], 0)
         right = np.isclose(sd.face_centers[0, :], 1)
-        b_faces = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
+        ess_dof = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
 
         # function for the essential boundary conditions
         val = np.array([[0, 0, 0], [0, 1e-3, 0]])
         fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
 
-        ess_dof = np.zeros(self.dofs.sum(), dtype=bool)
-        ess_dof[: self.dofs[0]] = b_faces
-
-        ess_val = np.zeros(ess_dof.size)
-        ess_val[: self.dofs[0]] = -self.discr_s.interpolate(sd, fct)
+        # interpolate the essential boundary conditions
+        ess_val = -self.discr_s.interpolate(sd, fct)
 
         return ess_dof, ess_val
 
@@ -54,7 +52,7 @@ if __name__ == "__main__":
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    solver = LocalSolver(sd, data, keyword)
+    solver = LocalSolver(sd, data, keyword, spanning_tree=True)
 
     # step 1
     sf = solver.compute_sf()

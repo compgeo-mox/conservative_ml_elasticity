@@ -8,7 +8,7 @@ import porepy as pp
 
 
 class Solver:
-    def __init__(self, sd, data, keyword):
+    def __init__(self, sd, data, keyword, spanning_tree):
         self.sd = sd
         self.keyword = keyword
 
@@ -19,60 +19,67 @@ class Solver:
             self.keyword
         )
 
-        self.build_matrices(data)
+        # build the matrices
+        self.build_matrices(data, spanning_tree)
 
-    def build_matrices(self, data):
+    def build_matrices(self, data, spanning_tree):
+        sd = self.sd
+
         # build the mass matrix for the stress
-        self.Ms = self.discr_s.assemble_mass_matrix(self.sd, data)
+        self.Ms = self.discr_s.assemble_mass_matrix(sd, data)
 
         # build the mass matrix for the displacement
-        self.Mu = self.discr_u.assemble_mass_matrix(self.sd)
+        self.Mu = self.discr_u.assemble_mass_matrix(sd)
 
         # build the mass matrix for the rotation
-        self.Mr = self.discr_r.assemble_mass_matrix(self.sd)
+        self.Mr = self.discr_r.assemble_mass_matrix(sd)
 
         # build the divergence operator acting on the stress
-        div = self.Mu @ self.discr_s.assemble_diff_matrix(self.sd)
+        div = self.Mu @ self.discr_s.assemble_diff_matrix(sd)
 
         # build the asymmetric operator acting on the stress
-        asym = self.Mr @ self.discr_s.assemble_asym_matrix(self.sd)
+        asym = self.Mr @ self.discr_s.assemble_asym_matrix(sd)
 
         # build the constriant operator
         self.B = sps.vstack((-div, -asym))
 
-        # build the saddle point matrix
-        self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
-
         # build the degrees of freedom
         self.dofs = np.array(
             [
-                self.discr_s.ndof(self.sd),
-                self.discr_u.ndof(self.sd),
-                self.discr_r.ndof(self.sd),
+                self.discr_s.ndof(sd),
+                self.discr_u.ndof(sd),
+                self.discr_r.ndof(sd),
             ]
         )
 
         # consider essential bc
         self.ess_dof, self.ess_val = self.ess_bc()
-        # ess_dof, ess_val = ess_dof[: self.dofs[0]], ess_val[: self.dofs[0]]
+
+        # consider the natual bc and the vector source term
+        self.g_val, self.nat_dof = self.get_g()
 
         # define the restriction operator
-        to_keep = np.logical_not(self.ess_dof[: self.dofs[0]])
+        to_keep = np.logical_not(self.ess_dof)
         self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
 
-        if self.sd.dim == 2:
+        if spanning_tree:
             # build the spanning tree solve if it is available
-            sptr = pg.SpanningTreeElasticity(self.sd, 0)
+            starting_face = np.where(self.nat_dof)[0][0]
+            sptr = pg.SpanningTreeElasticity(sd, starting_face=starting_face)
+
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
-        elif self.sd.dim == 3:
-            # in 3d consider the standard BBT approach
+
+        else:
+            # consider the standard BBT approach
             B_red = self.B @ self.R_0.T @ self.R_0
             BBT = B_red @ B_red.T
+
             self.sptr_solve = lambda x: B_red.T @ sps.linalg.spsolve(BBT, x)
             self.sptr_solve_transpose = lambda x: sps.linalg.spsolve(BBT, B_red @ x)
-        else:
-            raise ValueError("not implemented")
+
+        # build the saddle point matrix
+        self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
 
     def SI(self, x):
         # solve the spanning tree problem
@@ -92,8 +99,8 @@ class Solver:
 
     def compute_sf(self):
         # compute the particular solution
-        f = self.get_f() - self.B @ self.ess_val[: self.dofs[0]]
-        return self.sptr_solve(f) + self.ess_val[: self.dofs[0]]
+        f = self.get_f() - self.B @ self.ess_val
+        return self.sptr_solve(f) + self.ess_val
 
     def compute_s0(self):
         # compute the homogeneous solution by solving the direct problem
@@ -102,7 +109,6 @@ class Solver:
 
     def compute_s0_cg(self, sf, rtol=1e-10):
         # compute the homogeneous solution by solving the iterative problem
-        print("da inserire le bc essenziali")
 
         # help function to count the number of iterations
         iters = 0
@@ -116,7 +122,7 @@ class Solver:
         A_op_red = lambda x: self.R_0 @ A_op(self.R_0.T @ x)
 
         # define the right-hand side of the reduced system
-        b = self.R_0 @ self.S0_T(self.get_g() - self.Ms @ sf)
+        b = self.R_0 @ self.S0_T(self.g_val - self.Ms @ sf)
 
         A = sps.linalg.LinearOperator([b.size] * 2, matvec=A_op_red)
 
@@ -138,14 +144,11 @@ class Solver:
             raise ValueError("s0 is not in the kernel of B")
 
     def compute_all(self, s0, sf):
-        # compute the source term
-        g = self.get_g()
-
         # post process the stress
         s = s0 + sf
 
         # post process the displacemnet and the rotation
-        x = self.sptr_solve_transpose(self.Ms @ s - g)
+        x = self.sptr_solve_transpose(self.Ms @ s - self.g_val)
         u, r = x[: self.dofs[1]], x[self.dofs[1] :]
 
         return s, u, r
@@ -153,13 +156,12 @@ class Solver:
     def compute_direct(self):
         # compute both right hand sides
         f = self.get_f()
-        g = self.get_g()
-        rhs = np.hstack((g, f))
+        rhs = np.hstack((self.g_val, f))
 
         # solve the saddle point problem
         ls = pg.LinearSystem(self.spp, rhs)
         if np.any(self.ess_dof):
-            ls.flag_ess_bc(self.ess_dof, self.ess_val)
+            ls.flag_ess_bc(np.where(self.ess_dof)[0], self.ess_val)
         x = ls.solve()
 
         # split and return the solution
@@ -174,6 +176,10 @@ class Solver:
     def get_g(self):
         pass
 
+    @abc.abstractmethod
+    def ess_bc(self):
+        pass
+
     def compute_error(self, xn, x, M):
         # compute the L2 error
         delta = xn - x
@@ -181,17 +187,17 @@ class Solver:
         return np.sqrt(delta @ M @ delta) / (norm_x if not np.isclose(norm_x, 0) else 1)
 
     def export(self, u, r, file_name, folder):
-        dim = self.sd.dim
+        sd = self.sd
         # post process variables
-        proj_u = self.discr_u.eval_at_cell_centers(self.sd)
-        cell_u = (proj_u @ u).reshape((dim, -1), order="C")
+        proj_u = self.discr_u.eval_at_cell_centers(sd)
+        cell_u = (proj_u @ u).reshape((sd.dim, -1), order="C")
 
-        proj_r = self.discr_r.eval_at_cell_centers(self.sd)
-        if dim == 2:
+        proj_r = self.discr_r.eval_at_cell_centers(sd)
+        if sd.dim == 2:
             cell_u = np.vstack((cell_u, np.zeros(cell_u.shape[1])))
             cell_r = proj_r @ r
         else:
-            cell_r = (proj_r @ r).reshape((dim, -1), order="C")
+            cell_r = (proj_r @ r).reshape((sd.dim, -1), order="C")
 
-        save = pp.Exporter(self.sd, file_name, folder_name=folder)
+        save = pp.Exporter(sd, file_name, folder_name=folder)
         save.write_vtu([("cell_u", cell_u), ("cell_r", cell_r)])
