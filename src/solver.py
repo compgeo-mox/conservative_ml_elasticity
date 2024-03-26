@@ -40,6 +40,18 @@ class Solver:
         # build the constriant operator
         self.B = sps.vstack((-div, -asym))
 
+        # build the saddle point matrix
+        self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
+
+        # build the degrees of freedom
+        self.dofs = np.array(
+            [
+                self.discr_s.ndof(self.sd),
+                self.discr_u.ndof(self.sd),
+                self.discr_r.ndof(self.sd),
+            ]
+        )
+
         # consider essential bc
         self.ess_dof, self.ess_val = self.ess_bc()
         # ess_dof, ess_val = ess_dof[: self.dofs[0]], ess_val[: self.dofs[0]]
@@ -55,24 +67,12 @@ class Solver:
             self.sptr_solve_transpose = sptr.solve_transpose
         elif self.sd.dim == 3:
             # in 3d consider the standard BBT approach
-            B_red = self.B @ self.R_0.T
+            B_red = self.B @ self.R_0.T @ self.R_0
             BBT = B_red @ B_red.T
             self.sptr_solve = lambda x: B_red.T @ sps.linalg.spsolve(BBT, x)
             self.sptr_solve_transpose = lambda x: sps.linalg.spsolve(BBT, B_red @ x)
         else:
             raise ValueError("not implemented")
-
-        # build the saddle point matrix
-        self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
-
-        # build the degrees of freedom
-        self.dofs = np.array(
-            [
-                self.discr_s.ndof(self.sd),
-                self.discr_u.ndof(self.sd),
-                self.discr_r.ndof(self.sd),
-            ]
-        )
 
     def SI(self, x):
         # solve the spanning tree problem
