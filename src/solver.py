@@ -1,4 +1,5 @@
 import abc
+import time
 
 import numpy as np
 import scipy.sparse as sps
@@ -43,6 +44,10 @@ class Solver:
         # build the constriant operator
         self.B = sps.vstack((-div, -asym))
 
+        # assemble the vector BDM1 mass matrix useful for the ROM
+        mass = self.discr_s.scalar_discr.assemble_mass_matrix(sd, data)
+        self.D = sps.block_diag([mass] * sd.dim, format="csc")
+
         # build the degrees of freedom
         self.dofs = np.array(
             [
@@ -73,10 +78,10 @@ class Solver:
         else:
             # consider the standard BBT approach
             B_red = self.B @ self.R_0.T @ self.R_0
-            BBT = B_red @ B_red.T
+            BBT = sps.linalg.splu(B_red @ B_red.T)
 
-            self.sptr_solve = lambda x: B_red.T @ sps.linalg.spsolve(BBT, x)
-            self.sptr_solve_transpose = lambda x: sps.linalg.spsolve(BBT, B_red @ x)
+            self.sptr_solve = lambda x: B_red.T @ BBT.solve(x)
+            self.sptr_solve_transpose = lambda x: BBT.solve(B_red @ x)
 
         # build the saddle point matrix
         self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
@@ -107,7 +112,7 @@ class Solver:
         s, _, _ = self.compute_direct()
         return self.S0(s)
 
-    def compute_s0_cg(self, sf, rtol=1e-10):
+    def compute_s0_cg(self, sf, tol=1e-10):
         # compute the homogeneous solution by solving the iterative problem
 
         # help function to count the number of iterations
@@ -127,7 +132,10 @@ class Solver:
         A = sps.linalg.LinearOperator([b.size] * 2, matvec=A_op_red)
 
         # solve the reduced system with CG
-        s, exit_code = sps.linalg.cg(A, b, callback=nonlocal_iterate)  # rtol=rtol
+        start = time.time()
+        s, exit_code = sps.linalg.cg(A, b, tol=tol, callback=nonlocal_iterate)
+
+        print("Time to solve the reduced system", time.time() - start)
 
         if exit_code != 0:
             raise ValueError("CG did not converge")
