@@ -10,6 +10,10 @@ from solver import Solver
 
 
 class LocalSolver(Solver):
+    def __init__(self, sd, data, keyword, spanning_tree, force):
+        self.force = force
+        super().__init__(sd, data, keyword, spanning_tree)
+
     def get_f(self):
         return np.zeros(self.dofs[1] + self.dofs[2])
 
@@ -31,7 +35,7 @@ class LocalSolver(Solver):
         ess_dof = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
 
         # function for the essential boundary conditions
-        val = np.array([[0, 0, 0], [0, 1e-3, 0]])
+        val = np.array([[0, 0, 0], [0, self.force, 0]])
         fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
 
         # interpolate the essential boundary conditions
@@ -43,22 +47,23 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case1/"
-    step_size = 0.1
+    step_size = 0.05
     keyword = "elasticity"
-    tol = 1e-12
+    tol = 1e-8
 
     dim = 2
     sd = pg.unit_grid(dim, step_size, as_mdg=False)
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    solver = LocalSolver(sd, data, keyword, spanning_tree=True)
+    force = 1e-3
+    solver = LocalSolver(sd, data, keyword, False, force)
 
     # step 1
     sf = solver.compute_sf()
 
     # step 2
-    s0 = solver.compute_s0_cg(sf, rtol=tol)
+    s0 = solver.compute_s0_cg(sf, tol=tol)
     solver.check_s0(s0)
 
     # # step 3

@@ -10,9 +10,13 @@ from solver import Solver
 
 
 class LocalSolver(Solver):
+    def __init__(self, sd, data, keyword, spanning_tree, body_force):
+        self.body_force = body_force
+        super().__init__(sd, data, keyword, spanning_tree)
+
     def get_f(self):
 
-        fun = lambda _: np.array([0, 0, -1e-2])
+        fun = lambda _: np.array([0, 0, self.body_force])
         mass = self.discr_u.assemble_mass_matrix(self.sd)
         bd = self.discr_u.interpolate(self.sd, fun)
 
@@ -56,7 +60,7 @@ if __name__ == "__main__":
     folder = "examples/case2/"
     step_size = 0.25
     keyword = "elasticity"
-    tol = 1e-12
+    tol = 1e-6
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
@@ -64,13 +68,14 @@ if __name__ == "__main__":
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    solver = LocalSolver(sd, data, keyword, spanning_tree=False)
+    body_force = -1e-2
+    solver = LocalSolver(sd, data, keyword, False, body_force)
 
     # step 1
     sf = solver.compute_sf()
 
     # step 2
-    s0 = solver.compute_s0_cg(sf, rtol=tol)
+    s0 = solver.compute_s0_cg(sf, tol=tol)
     solver.check_s0(s0)
 
     # step 3
