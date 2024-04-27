@@ -54,18 +54,19 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case1/"
-    step_size = 0.05
+    mesh_size = 0.05
     keyword = "elasticity"
-    tol = 1e-8
+    tol = 1e-10
 
     dim = 2
-    sd = pg.unit_grid(dim, step_size, as_mdg=False)
+    sd = pg.unit_grid(dim, mesh_size, as_mdg=False)
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
     body_force = -1e-2
     force = 1e-3
-    solver = LocalSolver(sd, data, keyword, False, body_force, force)
+    num_spanning_trees = 1
+    solver = LocalSolver(sd, data, keyword, num_spanning_trees, body_force, force)
 
     # step 1
     sf = solver.compute_sf()

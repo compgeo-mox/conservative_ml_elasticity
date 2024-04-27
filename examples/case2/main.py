@@ -60,7 +60,7 @@ if __name__ == "__main__":
     folder = "examples/case2/"
     step_size = 0.25
     keyword = "elasticity"
-    tol = 1e-6
+    tol = 1e-10
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
@@ -69,7 +69,8 @@ if __name__ == "__main__":
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
     body_force = -1e-2
-    solver = LocalSolver(sd, data, keyword, False, body_force)
+    num_spanning_trees = 1
+    solver = LocalSolver(sd, data, keyword, num_spanning_trees, body_force)
 
     # step 1
     sf = solver.compute_sf()

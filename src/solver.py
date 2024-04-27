@@ -9,7 +9,7 @@ import porepy as pp
 
 
 class Solver:
-    def __init__(self, sd, data, keyword, spanning_tree):
+    def __init__(self, sd, data, keyword, num_spanning_tree):
         self.sd = sd
         self.keyword = keyword
 
@@ -21,9 +21,9 @@ class Solver:
         )
 
         # build the matrices
-        self.build_matrices(data, spanning_tree)
+        self.build_matrices(data, num_spanning_tree)
 
-    def build_matrices(self, data, spanning_tree):
+    def build_matrices(self, data, num_spanning_tree):
         sd = self.sd
 
         # build the mass matrix for the stress
@@ -67,10 +67,19 @@ class Solver:
         to_keep = np.logical_not(self.ess_dof)
         self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
 
-        if spanning_tree:
+        if num_spanning_tree:
             # build the spanning tree solve if it is available
-            starting_face = np.where(self.nat_dof)[0][0]
-            sptr = pg.SpanningTreeElasticity(sd, starting_face=starting_face)
+            nat_faces = np.where(self.nat_dof)[0]
+            starting_faces = nat_faces[
+                np.linspace(
+                    0, nat_faces.size, num_spanning_tree, endpoint=False, dtype=int
+                )
+            ]
+
+            # sptr_basic = pg.SpanningTreeElasticity
+            # weights = np.ones_like(starting_faces) / num_spanning_tree
+            # sptr = pg.SpanningWeightedTrees(sd, sptr_basic, weights, starting_faces)
+            sptr = pg.SpanningTreeElasticity(sd)
 
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
