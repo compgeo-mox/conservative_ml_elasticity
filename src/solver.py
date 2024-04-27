@@ -132,7 +132,7 @@ class Solver:
             iters += 1
 
         # define implicitly the operator associated to the reduced system
-        A_op = lambda x: self.S0_T(self.Ms @ self.S0(x))
+        A_op = lambda x: self.S0_T(self.Ms @ self.S0(x)) + self.SI(self.SI_T(x))
         A_op_red = lambda x: self.R_0 @ A_op(self.R_0.T @ x)
 
         # define the right-hand side of the reduced system

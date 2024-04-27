@@ -58,13 +58,13 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case2/"
-    step_size = 0.25
+    mesh_size = 0.125
     keyword = "elasticity"
     tol = 1e-10
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
-    sd = pg.grid_from_domain(domain, step_size, as_mdg=False)
+    sd = pg.grid_from_domain(domain, mesh_size, as_mdg=False)
     sd.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
