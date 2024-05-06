@@ -10,9 +10,9 @@ from solver import Solver
 
 
 class LocalSolver(Solver):
-    def __init__(self, sd, data, keyword, spanning_tree, body_force):
+    def __init__(self, sd, data, keyword, if_spt, body_force):
         self.body_force = body_force
-        super().__init__(sd, data, keyword, spanning_tree)
+        super().__init__(sd, data, keyword, if_spt)
 
     def get_f(self):
 
@@ -25,7 +25,7 @@ class LocalSolver(Solver):
         return f
 
     def get_g(self):
-        x_min = sd.face_centers[0, :].min()
+        x_min = self.sd.face_centers[0, :].min()
         b_faces = np.isclose(self.sd.face_centers[0, :], x_min)
 
         # define the boundary condition
@@ -58,19 +58,19 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case2/"
-    mesh_size = 0.125
+    mesh_size = 0.25
     keyword = "elasticity"
     tol = 1e-10
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
-    sd = pg.grid_from_domain(domain, mesh_size, as_mdg=False)
-    sd.compute_geometry()
+    mdg = pg.grid_from_domain(domain, mesh_size)
+    mdg.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
     body_force = -1e-2
-    num_spanning_trees = 1
-    solver = LocalSolver(sd, data, keyword, num_spanning_trees, body_force)
+    if_spt = True
+    solver = LocalSolver(mdg, data, keyword, if_spt, body_force)
 
     # step 1
     sf = solver.compute_sf()

@@ -9,51 +9,50 @@ import porepy as pp
 
 
 class Solver:
-    def __init__(self, sd, data, keyword, num_spanning_tree):
-        self.sd = sd
+    def __init__(self, mdg, data, keyword, if_spt):
+        self.mdg = mdg
+        self.sd = mdg.subdomains()[0]
         self.keyword = keyword
 
         # define the discretization objects useful for our case
         self.discr_s = pg.VecBDM1(self.keyword)
         self.discr_u = pg.VecPwConstants(self.keyword)
-        self.discr_r = (pg.PwConstants if sd.dim == 2 else pg.VecPwConstants)(
+        self.discr_r = (pg.PwConstants if self.sd.dim == 2 else pg.VecPwConstants)(
             self.keyword
         )
 
         # build the matrices
-        self.build_matrices(data, num_spanning_tree)
+        self.build_matrices(data, if_spt)
 
-    def build_matrices(self, data, num_spanning_tree):
-        sd = self.sd
-
+    def build_matrices(self, data, if_spt):
         # build the mass matrix for the stress
-        self.Ms = self.discr_s.assemble_mass_matrix(sd, data)
+        self.Ms = self.discr_s.assemble_mass_matrix(self.sd, data)
 
         # build the mass matrix for the displacement
-        self.Mu = self.discr_u.assemble_mass_matrix(sd)
+        self.Mu = self.discr_u.assemble_mass_matrix(self.sd)
 
         # build the mass matrix for the rotation
-        self.Mr = self.discr_r.assemble_mass_matrix(sd)
+        self.Mr = self.discr_r.assemble_mass_matrix(self.sd)
 
         # build the divergence operator acting on the stress
-        div = self.Mu @ self.discr_s.assemble_diff_matrix(sd)
+        div = self.Mu @ self.discr_s.assemble_diff_matrix(self.sd)
 
         # build the asymmetric operator acting on the stress
-        asym = self.Mr @ self.discr_s.assemble_asym_matrix(sd)
+        asym = self.Mr @ self.discr_s.assemble_asym_matrix(self.sd)
 
         # build the constriant operator
         self.B = sps.vstack((-div, -asym))
 
         # assemble the vector BDM1 mass matrix useful for the ROM
-        mass = self.discr_s.scalar_discr.assemble_mass_matrix(sd, data)
-        self.D = sps.block_diag([mass] * sd.dim, format="csc")
+        mass = self.discr_s.scalar_discr.assemble_mass_matrix(self.sd, data)
+        self.D = sps.block_diag([mass] * self.sd.dim, format="csc")
 
         # build the degrees of freedom
         self.dofs = np.array(
             [
-                self.discr_s.ndof(sd),
-                self.discr_u.ndof(sd),
-                self.discr_r.ndof(sd),
+                self.discr_s.ndof(self.sd),
+                self.discr_u.ndof(self.sd),
+                self.discr_r.ndof(self.sd),
             ]
         )
 
@@ -67,19 +66,9 @@ class Solver:
         to_keep = np.logical_not(self.ess_dof)
         self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
 
-        if num_spanning_tree:
+        if if_spt:
             # build the spanning tree solve if it is available
-            nat_faces = np.where(self.nat_dof)[0]
-            starting_faces = nat_faces[
-                np.linspace(
-                    0, nat_faces.size, num_spanning_tree, endpoint=False, dtype=int
-                )
-            ]
-
-            # sptr_basic = pg.SpanningTreeElasticity
-            # weights = np.ones_like(starting_faces) / num_spanning_tree
-            # sptr = pg.SpanningWeightedTrees(sd, sptr_basic, weights, starting_faces)
-            sptr = pg.SpanningTreeElasticity(sd)
+            sptr = pg.SpanningTreeElasticity(self.mdg)
 
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
