@@ -10,10 +10,10 @@ from solver import Solver
 
 
 class LocalSolver(Solver):
-    def __init__(self, sd, data, keyword, spanning_tree, body_force, force):
+    def __init__(self, sd, data, keyword, if_spt, body_force, force):
         self.body_force = body_force
         self.force = force
-        super().__init__(sd, data, keyword, spanning_tree)
+        super().__init__(sd, data, keyword, if_spt)
 
     def get_f(self):
         fun = lambda _: np.array([0, self.body_force, 0])
@@ -54,18 +54,19 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case1/"
-    step_size = 0.05
+    mesh_size = 0.05
     keyword = "elasticity"
-    tol = 1e-8
+    tol = 1e-12
 
     dim = 2
-    sd = pg.unit_grid(dim, step_size, as_mdg=False)
-    sd.compute_geometry()
+    mdg = pg.unit_grid(dim, mesh_size)
+    mdg.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
     body_force = -1e-2
     force = 1e-3
-    solver = LocalSolver(sd, data, keyword, False, body_force, force)
+    if_spt = True
+    solver = LocalSolver(mdg, data, keyword, if_spt, body_force, force)
 
     # step 1
     sf = solver.compute_sf()
