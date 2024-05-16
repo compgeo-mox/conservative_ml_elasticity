@@ -67,8 +67,7 @@ class Solver:
         self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
 
         if if_spt:
-            # build the spanning tree solve if it is available
-            sptr = pg.SpanningTreeElasticity(self.mdg)
+            sptr = pg.SpanningTreeElasticity(self.mdg, self.nat_dof)
 
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
