@@ -60,7 +60,7 @@ if __name__ == "__main__":
     folder = "examples/case2/"
     mesh_size = 0.25
     keyword = "elasticity"
-    tol = 1e-10
+    tol = 1e-12
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
