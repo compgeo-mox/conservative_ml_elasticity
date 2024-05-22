@@ -124,14 +124,20 @@ class Solver:
         A_op = lambda x: self.S0_T(self.Ms @ self.S0(x)) + self.SI(self.SI_T(x))
         A_op_red = lambda x: self.R_0 @ A_op(self.R_0.T @ x)
 
+        # define implicitly the preconditioner
+        L_inv = sps.linalg.splu(self.discr_s.assemble_lumped_matrix(self.sd))
+        P_op = lambda x: self.S0_T(L_inv.solve(self.S0(x)))
+        P_op_red = lambda x: self.R_0 @ P_op(self.R_0.T @ x)
+
         # define the right-hand side of the reduced system
         b = self.R_0 @ self.S0_T(self.g_val - self.Ms @ sf)
 
         A = sps.linalg.LinearOperator([b.size] * 2, matvec=A_op_red)
+        P = sps.linalg.LinearOperator([b.size] * 2, matvec=P_op_red)
 
         # solve the reduced system with CG
         start = time.time()
-        s, exit_code = sps.linalg.cg(A, b, tol=tol, callback=nonlocal_iterate)
+        s, exit_code = sps.linalg.cg(A, b, rtol=1e-5, callback=nonlocal_iterate)
 
         print("Time to solve the reduced system", time.time() - start)
 

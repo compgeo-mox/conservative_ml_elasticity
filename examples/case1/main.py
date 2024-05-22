@@ -3,9 +3,15 @@ import numpy as np
 import porepy as pp
 import pygeon as pg
 
+import os
 import sys
 
-sys.path.insert(0, "src/")
+dir_path = os.path.dirname(os.path.realpath(__file__))
+dir_path = os.path.dirname(dir_path)
+dir_path = os.path.dirname(dir_path)
+src_path = os.path.join(dir_path, "src")
+sys.path.insert(0, src_path)
+
 from solver import Solver
 
 
@@ -54,7 +60,7 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case1/"
-    mesh_size = 0.05
+    mesh_size = 0.1
     keyword = "elasticity"
     tol = 1e-12
 
