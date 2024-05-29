@@ -28,6 +28,9 @@ class Solver:
         # build the mass matrix for the stress
         self.Ms = self.discr_s.assemble_mass_matrix(self.sd, data)
 
+        # buld the lumped mass matrix for the preconditioning
+        self.Ls = self.discr_s.assemble_lumped_matrix(self.sd, data)
+
         # build the mass matrix for the displacement
         self.Mu = self.discr_u.assemble_mass_matrix(self.sd)
 
@@ -68,8 +71,15 @@ class Solver:
 
         if if_spt:
             # build the spanning tree solve if it is available
-            sptr = pg.SpanningTreeElasticity(self.mdg)
+            sd = self.mdg.subdomains()[0]
 
+            if sd.dim == 2:
+                s_f = sd.face_centers[1, :] < 1e-10
+            else:
+                s_f = sd.face_centers[0, :] < 1e-10
+            sptr = pg.SpanningTreeElasticity(self.mdg, starting_faces=s_f)
+
+            self.sptr = sptr
             self.sptr_solve = sptr.solve
             self.sptr_solve_transpose = sptr.solve_transpose
 
@@ -93,11 +103,11 @@ class Solver:
         return self.sptr_solve_transpose(x)
 
     def S0(self, x):
-        # solve the homogeneous problem
+        # project to the kernel
         return x - self.SI(self.B @ x)
 
     def S0_T(self, x):
-        # solve the transpose of the homogeneous problem
+        # transpose of the projection to the kernel
         return x - self.B.T @ self.SI_T(x)
 
     def compute_sf(self):
@@ -105,10 +115,23 @@ class Solver:
         f = self.get_f() - self.B @ self.ess_val
         return self.sptr_solve(f) + self.ess_val
 
-    def compute_s0(self):
-        # compute the homogeneous solution by solving the direct problem
-        s, _, _ = self.compute_direct()
-        return self.S0(s)
+    def compute_s0(self, sf):
+        # compute the homogeneous solution
+        S_I = self.sptr.assemble_SI()
+        S_0 = sps.eye_array(S_I.shape[0]) - S_I @ self.B
+
+        A = S_0.T @ self.Ms @ S_0 + S_I @ S_I.T
+        A.data[np.abs(A.data) < 1e-16] = 0
+        A.eliminate_zeros()
+
+        b = self.S0_T(self.g_val - self.Ms @ sf)
+
+        ls = pg.LinearSystem(A, b)
+        ls.flag_ess_bc(self.ess_dof, np.zeros_like(sf))
+
+        s_0 = ls.solve()
+
+        return self.S0(s_0)
 
     def compute_s0_cg(self, sf, tol=1e-10):
         # compute the homogeneous solution by solving the iterative problem
@@ -121,13 +144,12 @@ class Solver:
             iters += 1
 
         # define implicitly the operator associated to the reduced system
-        A_op = lambda x: self.S0_T(self.Ms @ self.S0(x)) + self.SI(self.SI_T(x))
+        A_op = lambda x: self.S0_T(self.Ms @ self.S0(x))  # + self.SI(self.SI_T(x))
         A_op_red = lambda x: self.R_0 @ A_op(self.R_0.T @ x)
 
         # define implicitly the preconditioner
-        L_inv = sps.linalg.splu(self.discr_s.assemble_lumped_matrix(self.sd))
-        P_op = lambda x: self.S0_T(L_inv.solve(self.S0(x)))
-        P_op_red = lambda x: self.R_0 @ P_op(self.R_0.T @ x)
+        L_inv = sps.linalg.splu(self.R_0 @ self.Ls @ self.R_0.T)
+        P_op_red = lambda x: L_inv.solve(x)
 
         # define the right-hand side of the reduced system
         b = self.R_0 @ self.S0_T(self.g_val - self.Ms @ sf)
@@ -136,15 +158,16 @@ class Solver:
         P = sps.linalg.LinearOperator([b.size] * 2, matvec=P_op_red)
 
         # solve the reduced system with CG
-        start = time.time()
-        s, exit_code = sps.linalg.cg(A, b, rtol=1e-5, callback=nonlocal_iterate)
+        # start = time.time()
 
-        print("Time to solve the reduced system", time.time() - start)
+        s, exit_code = sps.linalg.cg(A, b, M=P, rtol=tol, callback=nonlocal_iterate)
+
+        # print("Time to solve the reduced system", time.time() - start)
 
         if exit_code != 0:
             raise ValueError("CG did not converge")
-        else:
-            print("Number of iterations", iters)
+        # else:
+        #     print("Number of iterations / ndof: {} / {}".format(iters, len(b)))
 
         return self.S0(self.R_0.T @ s)
 

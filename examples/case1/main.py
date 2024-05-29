@@ -6,11 +6,8 @@ import pygeon as pg
 import os
 import sys
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-dir_path = os.path.dirname(dir_path)
-dir_path = os.path.dirname(dir_path)
-src_path = os.path.join(dir_path, "src")
-sys.path.insert(0, src_path)
+src_path = os.path.join(__file__, "../../../src")
+sys.path.insert(0, os.path.realpath(src_path))
 
 from solver import Solver
 
@@ -60,9 +57,9 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case1/"
-    mesh_size = 0.1
+    mesh_size = 0.05
     keyword = "elasticity"
-    tol = 1e-12
+    tol_array = np.power(10.0, np.arange(-7, -13, -1))
 
     dim = 2
     mdg = pg.unit_grid(dim, mesh_size)
@@ -74,25 +71,27 @@ if __name__ == "__main__":
     if_spt = True
     solver = LocalSolver(mdg, data, keyword, if_spt, body_force, force)
 
-    # step 1
-    sf = solver.compute_sf()
-
-    # step 2
-    s0 = solver.compute_s0_cg(sf, tol=tol)
-    solver.check_s0(s0)
-
-    # # step 3
-    s, u, r = solver.compute_all(s0, sf)
-
     # check with a direct computation
     s_dir, u_dir, r_dir = solver.compute_direct()
 
-    # compute the errors
-    err_s = solver.compute_error(s, s_dir, solver.Ms)
-    err_u = solver.compute_error(u, u_dir, solver.Mu)
-    err_r = solver.compute_error(r, r_dir, solver.Mr)
+    # step 1
+    sf = solver.compute_sf()
 
-    print(err_s, err_u, err_r)
+    for tol in tol_array:
+        # step 2
+        # s0 = solver.compute_s0(sf)
+        s0 = solver.compute_s0_cg(sf, tol=tol)
+        # solver.check_s0(s0)
+
+        # # step 3
+        s, u, r = solver.compute_all(s0, sf)
+
+        # compute the errors
+        err_s = solver.compute_error(s, s_dir, solver.Ms)
+        err_u = solver.compute_error(u, u_dir, solver.Mu)
+        err_r = solver.compute_error(r, r_dir, solver.Mr)
+
+        print("{:.2E}, {:.2E}, {:.2E}".format(err_s, err_u, err_r))
 
     # export the results
     solver.export(u, r, "tsp", folder)
