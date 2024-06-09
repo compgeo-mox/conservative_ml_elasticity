@@ -3,9 +3,12 @@ import numpy as np
 import porepy as pp
 import pygeon as pg
 
+import os
 import sys
 
-sys.path.insert(0, "src/")
+src_path = os.path.join(__file__, "../../../src")
+sys.path.insert(0, os.path.realpath(src_path))
+
 from solver import Solver
 
 
@@ -25,21 +28,24 @@ class LocalSolver(Solver):
         return f
 
     def get_g(self):
-        b_faces = np.isclose(self.sd.face_centers[1, :], 0)
+        sd = self.sd
+
+        bottom = np.isclose(sd.face_centers[1, :], 0)
+        left = np.isclose(sd.face_centers[0, :], 0)
+        right = np.isclose(sd.face_centers[0, :], 1)
+        b_faces = np.logical_or.reduce((bottom, right, left))
 
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces), b_faces
+        return self.discr_s.assemble_nat_bc(sd, u_boundary, b_faces), b_faces
 
     def ess_bc(self):
         sd = self.sd
 
         # select the faces for the essential boundary conditions
         top = np.isclose(sd.face_centers[1, :], 1)
-        left = np.isclose(sd.face_centers[0, :], 0)
-        right = np.isclose(sd.face_centers[0, :], 1)
-        ess_dof = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
+        ess_dof = np.tile(top, sd.dim**2)
 
         # function for the essential boundary conditions
         val = np.array([[0, 0, 0], [0, self.force, 0]])
@@ -56,7 +62,7 @@ if __name__ == "__main__":
     folder = "examples/case1/"
     mesh_size = 0.05
     keyword = "elasticity"
-    tol = 1e-12
+    tol_array = np.power(10.0, np.arange(-7, -13, -1))
 
     dim = 2
     mdg = pg.unit_grid(dim, mesh_size)
@@ -68,25 +74,27 @@ if __name__ == "__main__":
     if_spt = True
     solver = LocalSolver(mdg, data, keyword, if_spt, body_force, force)
 
-    # step 1
-    sf = solver.compute_sf()
-
-    # step 2
-    s0 = solver.compute_s0_cg(sf, tol=tol)
-    solver.check_s0(s0)
-
-    # # step 3
-    s, u, r = solver.compute_all(s0, sf)
-
     # check with a direct computation
     s_dir, u_dir, r_dir = solver.compute_direct()
 
-    # compute the errors
-    err_s = solver.compute_error(s, s_dir, solver.Ms)
-    err_u = solver.compute_error(u, u_dir, solver.Mu)
-    err_r = solver.compute_error(r, r_dir, solver.Mr)
+    # step 1
+    sf = solver.compute_sf()
 
-    print(err_s, err_u, err_r)
+    for tol in tol_array:
+        # step 2
+        # s0 = solver.compute_s0(sf)
+        s0 = solver.compute_s0_cg(sf, tol=tol)
+        # solver.check_s0(s0)
+
+        # # step 3
+        s, u, r = solver.compute_all(s0, sf)
+
+        # compute the errors
+        err_s = solver.compute_error(s, s_dir, solver.Ms)
+        err_u = solver.compute_error(u, u_dir, solver.Mu)
+        err_r = solver.compute_error(r, r_dir, solver.Mr)
+
+        print("{:.2E}, {:.2E}, {:.2E}".format(err_s, err_u, err_r))
 
     # export the results
     solver.export(u, r, "tsp", folder)

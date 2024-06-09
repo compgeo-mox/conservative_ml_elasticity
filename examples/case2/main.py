@@ -58,9 +58,10 @@ class LocalSolver(Solver):
 if __name__ == "__main__":
     # NOTE: difficulty to converge for RBM
     folder = "examples/case2/"
-    mesh_size = 0.25
+    mesh_size = 0.2
     keyword = "elasticity"
-    tol = 1e-12
+    tol = 1e-5
+    tol_array = np.power(10.0, np.arange(-5, -10, -1))
 
     bbox = {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 0.5, "zmin": 0, "zmax": 0.5}
     domain = pp.Domain(bbox)
@@ -75,22 +76,23 @@ if __name__ == "__main__":
     # step 1
     sf = solver.compute_sf()
 
-    # step 2
-    s0 = solver.compute_s0_cg(sf, tol=tol)
-    solver.check_s0(s0)
-
-    # step 3
-    s, u, r = solver.compute_all(s0, sf)
-
     # check with a direct computation
     s_dir, u_dir, r_dir = solver.compute_direct()
 
-    # compute the errors
-    err_s = solver.compute_error(s, s_dir, solver.Ms)
-    err_u = solver.compute_error(u, u_dir, solver.Mu)
-    err_r = solver.compute_error(r, r_dir, solver.Mr)
+    for tol in tol_array:
+        # step 2
+        s0 = solver.compute_s0_cg(sf, tol=tol)
+        # solver.check_s0(s0)
 
-    print(err_s, err_u, err_r)
+        # step 3
+        s, u, r = solver.compute_all(s0, sf)
+
+        # compute the errors
+        err_s = solver.compute_error(s, s_dir, solver.Ms)
+        err_u = solver.compute_error(u, u_dir, solver.Mu)
+        err_r = solver.compute_error(r, r_dir, solver.Mr)
+
+        print("{:.2E}, {:.2E}, {:.2E}".format(err_s, err_u, err_r))
 
     # export the results
     solver.export(u, r, "tsp", folder)
