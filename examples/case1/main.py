@@ -28,21 +28,24 @@ class LocalSolver(Solver):
         return f
 
     def get_g(self):
-        b_faces = np.isclose(self.sd.face_centers[1, :], 0)
+        sd = self.sd
+
+        bottom = np.isclose(sd.face_centers[1, :], 0)
+        left = np.isclose(sd.face_centers[0, :], 0)
+        right = np.isclose(sd.face_centers[0, :], 1)
+        b_faces = np.logical_or.reduce((bottom, right, left))
 
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces), b_faces
+        return self.discr_s.assemble_nat_bc(sd, u_boundary, b_faces), b_faces
 
     def ess_bc(self):
         sd = self.sd
 
         # select the faces for the essential boundary conditions
         top = np.isclose(sd.face_centers[1, :], 1)
-        left = np.isclose(sd.face_centers[0, :], 0)
-        right = np.isclose(sd.face_centers[0, :], 1)
-        ess_dof = np.tile(np.logical_or.reduce((left, right, top)), sd.dim**2)
+        ess_dof = np.tile(top, sd.dim**2)
 
         # function for the essential boundary conditions
         val = np.array([[0, 0, 0], [0, self.force, 0]])
