@@ -114,17 +114,12 @@ class Solver:
         S_0 = sps.eye_array(S_I.shape[0]) - S_I @ self.B
 
         A = S_0.T @ self.Ms @ S_0 + S_I @ S_I.T
-        A.data[np.abs(A.data) < 1e-16] = 0
-        A.eliminate_zeros()
-
         b = self.S0_T(self.g_val - self.Ms @ sf)
 
         ls = pg.LinearSystem(A, b)
         ls.flag_ess_bc(self.ess_dof, np.zeros_like(sf))
 
-        s_0 = ls.solve()
-
-        return self.S0(s_0)
+        return self.S0(ls.solve())
 
     def compute_s0_cg(self, sf, tol=1e-10):
         # compute the homogeneous solution by solving the iterative problem

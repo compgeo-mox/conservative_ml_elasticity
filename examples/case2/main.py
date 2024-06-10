@@ -56,8 +56,7 @@ class LocalSolver(Solver):
 
 
 if __name__ == "__main__":
-    # NOTE: difficulty to converge for RBM
-    folder = "examples/case2/"
+    folder = os.path.dirname(os.path.abspath(__file__))
     mesh_size = 0.2
     keyword = "elasticity"
     tol = 1e-5
