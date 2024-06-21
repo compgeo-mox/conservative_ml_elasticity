@@ -121,7 +121,7 @@ class Solver:
 
         return self.S0(ls.solve())
 
-    def compute_s0_cg(self, sf, tol=1e-10):
+    def compute_s0_cg(self, sf, tol=1e-10, verbose = True):
         # compute the homogeneous solution by solving the iterative problem
 
         # help function to count the number of iterations
@@ -148,6 +148,16 @@ class Solver:
         # solve the reduced system with CG
         # start = time.time()
 
+<<<<<<< HEAD
+        if(verbose):
+            print("Time to solve the reduced system", time.time() - start)
+
+        if exit_code != 0:
+            raise ValueError("CG did not converge")
+        else:
+            if(verbose):
+                print("Number of iterations", iters)
+=======
         s, exit_code = sps.linalg.cg(A, b, M=P, rtol=tol, callback=nonlocal_iterate)
 
         # print("Time to solve the reduced system", time.time() - start)
@@ -156,6 +166,7 @@ class Solver:
             raise ValueError("CG did not converge")
         # else:
         #     print("Number of iterations / ndof: {} / {}".format(iters, len(b)))
+>>>>>>> f53a9e08069078f72f5f38e5f171d8b1414fc88e
 
         return self.S0(self.R_0.T @ s)
 
@@ -163,6 +174,7 @@ class Solver:
         # check if the homogeneous solution respects the constraints
         if np.allclose(self.B @ s0, 0):
             print("s0 is in the kernel of B")
+            print(np.abs(self.B @ s0).max())
         else:
             raise ValueError("s0 is not in the kernel of B")
 
