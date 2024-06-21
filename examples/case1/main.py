@@ -30,9 +30,11 @@ class LocalSolver(Solver):
     def get_g(self):
         sd = self.sd
 
+        top = np.isclose(sd.face_centers[1, :], 1)
         bottom = np.isclose(sd.face_centers[1, :], 0)
         left = np.isclose(sd.face_centers[0, :], 0)
         right = np.isclose(sd.face_centers[0, :], 1)
+
         b_faces = np.logical_or.reduce((bottom, right, left))
 
         # define the boundary condition
@@ -44,12 +46,14 @@ class LocalSolver(Solver):
         sd = self.sd
 
         # select the faces for the essential boundary conditions
-        top = np.isclose(sd.face_centers[1, :], 1)
+        # top = np.isclose(sd.face_centers[1, :], 1)
+        top = np.zeros(sd.num_faces, dtype=bool)
         ess_dof = np.tile(top, sd.dim**2)
 
         # function for the essential boundary conditions
         val = np.array([[0, 0, 0], [0, self.force, 0]])
-        fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
+        # fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
+        fct = lambda pt: 0 * val
 
         # interpolate the essential boundary conditions
         ess_val = -self.discr_s.interpolate(sd, fct)
@@ -78,5 +82,8 @@ if __name__ == "__main__":
 
     # compute s0 directly from s and sf
     s0 = s - sf
+
+    s0_v2 = solver.S0(s)
+    print(np.linalg.norm(s0 - s0_v2))
 
     solver.export(u, r, "sol", folder)
