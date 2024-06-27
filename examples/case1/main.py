@@ -30,30 +30,26 @@ class LocalSolver(Solver):
     def get_g(self):
         sd = self.sd
 
-        top = np.isclose(sd.face_centers[1, :], 1)
         bottom = np.isclose(sd.face_centers[1, :], 0)
-        left = np.isclose(sd.face_centers[0, :], 0)
-        right = np.isclose(sd.face_centers[0, :], 1)
-
-        b_faces = np.logical_or.reduce((bottom, right, left))
-
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(sd, u_boundary, b_faces), b_faces
+        return self.discr_s.assemble_nat_bc(sd, u_boundary, bottom), bottom
 
     def ess_bc(self):
         sd = self.sd
 
         # select the faces for the essential boundary conditions
-        # top = np.isclose(sd.face_centers[1, :], 1)
-        top = np.zeros(sd.num_faces, dtype=bool)
-        ess_dof = np.tile(top, sd.dim**2)
+        top = np.isclose(sd.face_centers[1, :], 1)
+        left = np.isclose(sd.face_centers[0, :], 0)
+        right = np.isclose(sd.face_centers[0, :], 1)
+
+        b_faces = np.logical_or.reduce((top, left, right))
+        ess_dof = np.tile(b_faces, sd.dim**2)
 
         # function for the essential boundary conditions
         val = np.array([[0, 0, 0], [0, self.force, 0]])
-        # fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
-        fct = lambda pt: 0 * val
+        fct = lambda pt: val if np.isclose(pt[1], 1) else 0 * val
 
         # interpolate the essential boundary conditions
         ess_val = -self.discr_s.interpolate(sd, fct)
@@ -63,7 +59,7 @@ class LocalSolver(Solver):
 
 if __name__ == "__main__":
     folder = os.path.dirname(os.path.abspath(__file__))
-    mesh_size = 0.05
+    mesh_size = 0.1
     keyword = "elasticity"
 
     dim = 2
@@ -85,5 +81,6 @@ if __name__ == "__main__":
 
     s0_v2 = solver.S0(s)
     print(np.linalg.norm(s0 - s0_v2))
+    solver.check_s0(s0)
 
     solver.export(u, r, "sol", folder)

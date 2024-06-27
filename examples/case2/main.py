@@ -3,6 +3,7 @@ import numpy as np
 import porepy as pp
 import pygeon as pg
 
+import os
 import sys
 
 sys.path.insert(0, "src/")
@@ -16,7 +17,9 @@ class LocalSolver(Solver):
 
     def get_f(self):
 
-        fun = lambda _: np.array([0, 0, self.body_force])
+        # e' strana la body_force
+
+        fun = lambda _: np.array([0, self.body_force, 0])
         mass = self.discr_u.assemble_mass_matrix(self.sd)
         bd = self.discr_u.interpolate(self.sd, fun)
 
@@ -26,12 +29,12 @@ class LocalSolver(Solver):
 
     def get_g(self):
         x_min = self.sd.face_centers[0, :].min()
-        b_faces = np.isclose(self.sd.face_centers[0, :], x_min)
+        left = np.isclose(self.sd.face_centers[0, :], x_min)
 
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, b_faces), b_faces
+        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, left), left
 
     def ess_bc(self):
         sd = self.sd
@@ -68,31 +71,20 @@ if __name__ == "__main__":
     mdg.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    body_force = -1e-2
+    body_force = 1e-2
     if_spt = True
     solver = LocalSolver(mdg, data, keyword, if_spt, body_force)
 
-    # step 1
+    # check with a direct computation
+    s, u, r = solver.compute_direct()
     sf = solver.compute_sf()
 
-    # check with a direct computation
-    s_dir, u_dir, r_dir = solver.compute_direct()
+    # compute s0 directly from s and sf
+    s0 = s - sf
 
-    for tol in tol_array:
-        # step 2
-        s0 = solver.compute_s0_cg(sf, tol=tol)
-        # solver.check_s0(s0)
-
-        # step 3
-        s, u, r = solver.compute_all(s0, sf)
-
-        # compute the errors
-        err_s = solver.compute_error(s, s_dir, solver.Ms)
-        err_u = solver.compute_error(u, u_dir, solver.Mu)
-        err_r = solver.compute_error(r, r_dir, solver.Mr)
-
-        print("{:.2E}, {:.2E}, {:.2E}".format(err_s, err_u, err_r))
+    s0_v2 = solver.S0(s)
+    print(np.linalg.norm(s0 - s0_v2))
+    solver.check_s0(s0)
 
     # export the results
-    solver.export(u, r, "tsp", folder)
-    solver.export(u_dir, r_dir, "dir", folder)
+    solver.export(u, r, "sol", folder)

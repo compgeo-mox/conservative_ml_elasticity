@@ -105,8 +105,8 @@ class Solver:
 
     def compute_sf(self):
         # compute the particular solution
-        f = self.get_f() - self.B @ self.ess_val
-        return self.sptr_solve(f) + self.ess_val
+        f = self.get_f()
+        return self.sptr_solve(f)
 
     def compute_s0(self, sf):
         # compute the homogeneous solution
@@ -121,7 +121,7 @@ class Solver:
 
         return self.S0(ls.solve())
 
-    def compute_s0_cg(self, sf, tol=1e-10, verbose = True):
+    def compute_s0_cg(self, sf, tol=1e-10, verbose=True):
         # compute the homogeneous solution by solving the iterative problem
 
         # help function to count the number of iterations
@@ -148,16 +148,6 @@ class Solver:
         # solve the reduced system with CG
         # start = time.time()
 
-<<<<<<< HEAD
-        if(verbose):
-            print("Time to solve the reduced system", time.time() - start)
-
-        if exit_code != 0:
-            raise ValueError("CG did not converge")
-        else:
-            if(verbose):
-                print("Number of iterations", iters)
-=======
         s, exit_code = sps.linalg.cg(A, b, M=P, rtol=tol, callback=nonlocal_iterate)
 
         # print("Time to solve the reduced system", time.time() - start)
@@ -166,7 +156,6 @@ class Solver:
             raise ValueError("CG did not converge")
         # else:
         #     print("Number of iterations / ndof: {} / {}".format(iters, len(b)))
->>>>>>> f53a9e08069078f72f5f38e5f171d8b1414fc88e
 
         return self.S0(self.R_0.T @ s)
 
