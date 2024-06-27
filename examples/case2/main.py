@@ -17,9 +17,7 @@ class LocalSolver(Solver):
 
     def get_f(self):
 
-        # e' strana la body_force
-
-        fun = lambda _: np.array([0, self.body_force, 0])
+        fun = lambda _: np.array([0, 0, self.body_force])
         mass = self.discr_u.assemble_mass_matrix(self.sd)
         bd = self.discr_u.interpolate(self.sd, fun)
 
@@ -71,7 +69,7 @@ if __name__ == "__main__":
     mdg.compute_geometry()
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
-    body_force = 1e-2
+    body_force = -1e-2
     if_spt = True
     solver = LocalSolver(mdg, data, keyword, if_spt, body_force)
 
