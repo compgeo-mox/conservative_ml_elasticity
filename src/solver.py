@@ -47,7 +47,8 @@ class Solver:
         self.B = sps.vstack((-div, -asym))
 
         # assemble the vector BDM1 mass matrix useful for the ROM
-        mass = self.discr_s.scalar_discr.assemble_mass_matrix(self.sd, data)
+        # no data is passed so that the mass matrix is unscaled
+        mass = self.discr_s.scalar_discr.assemble_mass_matrix(self.sd)
         self.D = sps.block_diag([mass] * self.sd.dim, format="csc")
 
         # build the degrees of freedom
@@ -85,6 +86,9 @@ class Solver:
             self.sptr_solve_transpose = lambda x: BBT.solve(B_red @ x)
 
         # build the saddle point matrix
+        self.build_spp()
+
+    def build_spp(self):
         self.spp = sps.bmat([[self.Ms, -self.B.T], [self.B, None]], format="csc")
 
     def SI(self, x):
