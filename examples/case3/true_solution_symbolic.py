@@ -1,27 +1,33 @@
+import numpy as np
 import sympy as sp
 from sympy.physics.vector import ReferenceFrame
 
 
-def symbolic_u():
+def symbolic_u_and_f():
+    """
+    Compute a forcing term according to a given displacement
+    field with constant Lamé parameters
+    """
+
     dim = 2
     R = ReferenceFrame("R")
     x, y, _ = R.varlist
 
     # define the displacement
-    u_x = sp.sin(sp.pi * x) * sp.sin(sp.pi * y)
-    u_y = u_x
+    u_x = sp.sin(x) * sp.cos(y) * sp.exp(x * y)
+    u_y = sp.cos(x) * sp.sin(y) * sp.exp(-x * y)
     u = sp.Matrix([u_x, u_y])
 
+    # Compute the strain
     epsilon = sp.Matrix([sp.diff(u, x_i).T for x_i in (x, y)])
     epsilon += epsilon.T
     epsilon /= 2
 
     dev = epsilon - 0.5 * epsilon.trace() * sp.Identity(2)
-
     rho = sp.Matrix(dev).norm()
 
-    beta = 0.75e4
-    mu = 2 * beta  # beta * (1 + (1 + rho**2) ** (-0.5))
+    beta = 0.25
+    mu = beta  # * (1 + (1 + rho**2) ** (-0.5))
     labda = beta * (1 - 2 * mu)
 
     sigma = 2 * mu * epsilon + labda * epsilon.trace() * sp.Identity(2)
