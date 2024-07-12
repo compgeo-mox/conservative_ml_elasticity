@@ -15,11 +15,29 @@ sys.path.insert(0, os.path.realpath(src_path))
 from solver import Solver
 
 
+def mu(rho, beta=1.5):
+    return 1 + (1 + np.square(rho)) ** ((beta - 2) / 2)
+
+
+def labda(rho, alpha=1):
+    return alpha * (1 - mu(rho) / 2)
+
+
+def g_u(x, gamma=1):
+    return gamma / 10 * np.array([x[0] * (1 - x[0]), x[1] * (1 - x[1])])
+
+
+def force(x, delta=1):
+    return delta * np.array(
+        [(4 * x[1] - 1) * (4 * x[1] - 3), (4 * x[0] - 1) * (4 * x[0] - 3)]
+    )
+
+
 class LocalSolver(Solver):
 
     def get_f(self):
         mass = self.discr_u.assemble_mass_matrix(self.sd)
-        bd = self.discr_u.interpolate(self.sd, f_sym)
+        bd = self.discr_u.interpolate(self.sd, force_delta)
 
         f = np.zeros(self.dofs[1] + self.dofs[2])
         f[: self.dofs[1]] = mass @ bd
@@ -31,7 +49,7 @@ class LocalSolver(Solver):
 
         bdry = sd.tags["domain_boundary_faces"]
         # return np.zeros(self.discr_s.ndof(sd)), bdry
-        return self.discr_s.assemble_nat_bc(sd, u_sym, bdry), bdry
+        return self.discr_s.assemble_nat_bc(sd, g_u_gamma, bdry), bdry
 
     def save_rhs(self):
         self.rhs = np.hstack((self.g_val, self.get_f()))
@@ -43,23 +61,15 @@ class LocalSolver(Solver):
         return ess_dof, ess_val
 
 
-def mu(rho, beta=0.25):
-    return beta * (1 + (1 + np.square(rho)) ** (-1 / 2))
-
-
-def labda(rho, kappa=0.25):
-    return kappa * (1 - 2 * mu(rho))
-
-
-def find_rho(dev_s):
+def find_rho(dev_s, beta):
     """
     Given the norm of the deviatoric stress,
     find the norm of the deviatoric strain.
     """
     # Set up nonlinear problem
-    func = lambda x: 2 * mu(x) * x - dev_s
+    func = lambda x: 2 * mu(x, beta) * x - dev_s
     # Initial guess asserts that mu(rho) is close to mu(0)
-    x0 = dev_s / (2 * mu(0))
+    x0 = dev_s / (2 * mu(0, beta))
     # Use scipy to find root
     result = spo.root_scalar(func, x0=x0)
     # assert result.converged
@@ -81,15 +91,24 @@ def compute_deviatoric_stress(s, Pi):
 
 if __name__ == "__main__":
     folder = os.path.dirname(os.path.abspath(__file__))
-    mesh_size = 0.1
+    mesh_size = 0.05
     keyword = "elasticity"
 
     dim = 2
     mdg = pg.unit_grid(dim, mesh_size)
     mdg.compute_geometry()
 
-    # Compute a source term and boundary conditions
-    u_sym, f_sym = symbolic_u_and_f()
+    # incorporate the parameters
+    alpha = 1
+    beta = 1.5
+    gamma = 0
+    delta = 1
+
+    # Create lambda functions for the parametrization
+    labda_alpha = lambda x: labda(x, alpha)
+    mu_beta = lambda x: mu(x, beta)
+    g_u_gamma = lambda x: g_u(x, gamma)
+    force_delta = lambda x: force(x, delta)
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 1}}}
     if_spt = True
@@ -108,11 +127,11 @@ if __name__ == "__main__":
 
         # Post-process the deviatoric stress and strain
         dev_s = compute_deviatoric_stress(s, Pi)
-        rho = np.array([find_rho(s) for s in dev_s])
+        rho = np.array([find_rho(s, beta) for s in dev_s])
 
         # Update the Lamé parameters
-        data[pp.PARAMETERS][keyword]["mu"] = mu(rho)
-        data[pp.PARAMETERS][keyword]["lambda"] = labda(rho)
+        data[pp.PARAMETERS][keyword]["mu"] = mu_beta(rho)
+        data[pp.PARAMETERS][keyword]["lambda"] = labda_alpha(rho)
 
         # Reassemble the mass matrix for the stress
         solver.Ms = solver.discr_s.assemble_mass_matrix(solver.sd, data)
