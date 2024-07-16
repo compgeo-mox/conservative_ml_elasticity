@@ -13,10 +13,10 @@ from solver import Solver
 
 
 class LocalSolver(Solver):
-    def __init__(self, sd, data, keyword, if_spt, body_force, force):
+    def __init__(self, sd, data, keyword, sptr, body_force, force):
         self.body_force = body_force
         self.force = force
-        super().__init__(sd, data, keyword, if_spt)
+        super().__init__(sd, data, keyword, sptr)
 
     def get_f(self):
         fun = lambda _: np.array([0, self.body_force, 0])
@@ -27,14 +27,18 @@ class LocalSolver(Solver):
         f[: self.dofs[1]] = mass @ bd
         return f
 
-    def get_g(self):
-        sd = self.sd
-
+    @staticmethod
+    def get_nat_bc(sd):
         bottom = np.isclose(sd.face_centers[1, :], 0)
+        return bottom
+
+    def get_g(self):
+        nat_bc = self.get_nat_bc(self.sd)
+
         # define the boundary condition
         u_boundary = lambda _: np.array([0, 0, 0])
 
-        return self.discr_s.assemble_nat_bc(sd, u_boundary, bottom), bottom
+        return self.discr_s.assemble_nat_bc(self.sd, u_boundary, nat_bc), nat_bc
 
     def ess_bc(self):
         sd = self.sd
@@ -69,8 +73,11 @@ if __name__ == "__main__":
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 1}}}
     body_force = -1e-2
     force = 1e-3
-    if_spt = True
-    solver = LocalSolver(mdg, data, keyword, if_spt, body_force, force)
+
+    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
+    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+
+    solver = LocalSolver(mdg, data, keyword, sptr, body_force, force)
 
     # check with a direct computation
     s, u, r = solver.compute_direct()

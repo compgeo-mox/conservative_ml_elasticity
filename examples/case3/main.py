@@ -43,13 +43,17 @@ class LocalSolver(Solver):
         f[: self.dofs[1]] = mass @ bd
         return f
 
+    @staticmethod
+    def get_nat_bc(sd):
+        bdry = sd.tags["domain_boundary_faces"]
+        return bdry
+
     def get_g(self):
         # Displacement bcs along the entire bdry.
-        sd = self.sd
+        nat_bc = self.get_nat_bc(self.sd)
 
-        bdry = sd.tags["domain_boundary_faces"]
         # return np.zeros(self.discr_s.ndof(sd)), bdry
-        return self.discr_s.assemble_nat_bc(sd, g_u_gamma, bdry), bdry
+        return self.discr_s.assemble_nat_bc(self.sd, g_u_gamma, nat_bc), nat_bc
 
     def save_rhs(self):
         self.rhs = np.hstack((self.g_val, self.get_f()))
@@ -111,8 +115,11 @@ if __name__ == "__main__":
     force_delta = lambda x: force(x, delta)
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 1}}}
-    if_spt = True
-    solver = LocalSolver(mdg, data, keyword, if_spt)
+
+    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
+    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+
+    solver = LocalSolver(mdg, data, keyword, sptr)
 
     Pi = solver.discr_s.eval_at_cell_centers(solver.sd)
 

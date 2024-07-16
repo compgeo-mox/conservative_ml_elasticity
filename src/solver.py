@@ -9,10 +9,11 @@ import porepy as pp
 
 
 class Solver:
-    def __init__(self, mdg, data, keyword, if_spt):
+    def __init__(self, mdg, data, keyword, sptr):
         self.mdg = mdg
         self.sd = mdg.subdomains()[0]
         self.keyword = keyword
+        self.sptr = sptr
 
         # define the discretization objects useful for our case
         self.discr_s = pg.VecBDM1(self.keyword)
@@ -22,9 +23,9 @@ class Solver:
         )
 
         # build the matrices
-        self.build_matrices(data, if_spt)
+        self.build_matrices(data)
 
-    def build_matrices(self, data, if_spt):
+    def build_matrices(self, data):
         # build the mass matrix for the stress
         self.Ms = self.discr_s.assemble_mass_matrix(self.sd, data)
 
@@ -70,21 +71,6 @@ class Solver:
         to_keep = np.logical_not(self.ess_dof)
         self.R_0 = pg.numerics.linear_system.create_restriction(to_keep)
 
-        if if_spt:
-            sptr = pg.SpanningTreeElasticity(self.mdg, self.nat_dof)
-
-            self.sptr = sptr
-            self.sptr_solve = sptr.solve
-            self.sptr_solve_transpose = sptr.solve_transpose
-
-        else:
-            # consider the standard BBT approach
-            B_red = self.B @ self.R_0.T @ self.R_0
-            BBT = sps.linalg.splu(B_red @ B_red.T)
-
-            self.sptr_solve = lambda x: B_red.T @ BBT.solve(x)
-            self.sptr_solve_transpose = lambda x: BBT.solve(B_red @ x)
-
         # build the saddle point matrix
         self.build_spp()
 
@@ -93,11 +79,11 @@ class Solver:
 
     def SI(self, x):
         # solve the spanning tree problem
-        return self.sptr_solve(x)
+        return self.sptr.solve(x)
 
     def SI_T(self, x):
         # solve the transpose of the spanning tree problem
-        return self.sptr_solve_transpose(x)
+        return self.sptr.solve_transpose(x)
 
     def S0(self, x):
         # project to the kernel
@@ -110,7 +96,7 @@ class Solver:
     def compute_sf(self):
         # compute the particular solution
         f = self.get_f()
-        return self.sptr_solve(f)
+        return self.sptr.solve(f)
 
     def compute_s0(self, sf):
         # compute the homogeneous solution
@@ -176,7 +162,7 @@ class Solver:
         s = s0 + sf
 
         # post process the displacemnet and the rotation
-        x = self.sptr_solve_transpose(self.Ms @ s - self.g_val)
+        x = self.sptr.solve_transpose(self.Ms @ s - self.g_val)
         u, r = x[: self.dofs[1]], x[self.dofs[1] :]
 
         return s, u, r
