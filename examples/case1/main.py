@@ -91,3 +91,7 @@ if __name__ == "__main__":
     solver.check_s0(s0)
 
     solver.export(u, r, "sol", folder)
+
+    # Compute the norm of the constraint violation, cell-wise
+    res = solver.B @ s - solver.get_f()
+    cell_wise_res = solver.cell_wise_residual(res)

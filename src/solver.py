@@ -215,3 +215,8 @@ class Solver:
 
         save = pp.Exporter(sd, file_name, folder_name=folder)
         save.write_vtu([("cell_u", cell_u), ("cell_r", cell_r)])
+
+    def cell_wise_residual(self, res):
+        """Computes the cell-wise Euclidean norm of the residual of the conservation equations"""
+        cell_res = res.reshape((-1, self.sd.num_cells), order="C")
+        return np.linalg.norm(cell_res, axis=0)

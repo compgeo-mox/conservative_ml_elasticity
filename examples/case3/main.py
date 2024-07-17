@@ -7,8 +7,6 @@ import pygeon as pg
 import os
 import sys
 
-from true_solution_symbolic import symbolic_u_and_f
-
 src_path = os.path.join(__file__, "../../../src")
 sys.path.insert(0, os.path.realpath(src_path))
 
