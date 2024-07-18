@@ -33,9 +33,15 @@ def force(x, delta=1):
 
 class LocalSolver(Solver):
 
+    def __init__(self, sd, data, keyword, sptr, g_u_gamma, force_delta):
+        self.g_u_gamma = g_u_gamma
+        self.force_delta = force_delta
+
+        super().__init__(sd, data, keyword, sptr)
+
     def get_f(self):
         mass = self.discr_u.assemble_mass_matrix(self.sd)
-        bd = self.discr_u.interpolate(self.sd, force_delta)
+        bd = self.discr_u.interpolate(self.sd, self.force_delta)
 
         f = np.zeros(self.dofs[1] + self.dofs[2])
         f[: self.dofs[1]] = mass @ bd
@@ -51,7 +57,7 @@ class LocalSolver(Solver):
         nat_bc = self.get_nat_bc(self.sd)
 
         # return np.zeros(self.discr_s.ndof(sd)), bdry
-        return self.discr_s.assemble_nat_bc(self.sd, g_u_gamma, nat_bc), nat_bc
+        return self.discr_s.assemble_nat_bc(self.sd, self.g_u_gamma, nat_bc), nat_bc
 
     def save_rhs(self):
         self.rhs = np.hstack((self.g_val, self.get_f()))
@@ -100,6 +106,9 @@ if __name__ == "__main__":
     mdg = pg.unit_grid(dim, mesh_size)
     mdg.compute_geometry()
 
+    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
+    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+
     # incorporate the parameters
     alpha = 1
     beta = 1.5
@@ -113,11 +122,7 @@ if __name__ == "__main__":
     force_delta = lambda x: force(x, delta)
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 1}}}
-
-    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
-    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
-
-    solver = LocalSolver(mdg, data, keyword, sptr)
+    solver = LocalSolver(mdg, data, keyword, sptr, g_u_gamma, force_delta)
 
     Pi = solver.discr_s.eval_at_cell_centers(solver.sd)
 

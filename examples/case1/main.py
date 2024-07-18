@@ -70,12 +70,12 @@ if __name__ == "__main__":
     mdg = pg.unit_grid(dim, mesh_size)
     mdg.compute_geometry()
 
+    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
+    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 1}}}
     body_force = -1e-2
     force = 1e-3
-
-    nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
-    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
 
     solver = LocalSolver(mdg, data, keyword, sptr, body_force, force)
 
