@@ -74,7 +74,7 @@ if __name__ == "__main__":
     mdg.compute_geometry()
 
     nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
-    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+    sptr = pg.SpanningTreeElasticity(mdg, np.where(nat_bc)[0])
 
     data = {pp.PARAMETERS: {keyword: {"mu": 0.5, "lambda": 0.5}}}
     body_force = -1e-2

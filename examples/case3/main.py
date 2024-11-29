@@ -107,7 +107,7 @@ if __name__ == "__main__":
     mdg.compute_geometry()
 
     nat_bc = LocalSolver.get_nat_bc(mdg.subdomains()[0])
-    sptr = pg.SpanningTreeElasticity(mdg, nat_bc)
+    sptr = pg.SpanningTreeElasticity(mdg, np.where(nat_bc)[0])
 
     # incorporate the parameters
     alpha = 1
